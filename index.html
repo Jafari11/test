@@ -18,7 +18,7 @@
     aside{display:flex;flex-direction:column;gap:14px}.panel{padding:16px}.panel h2{font-size:15px;margin:0 0 12px}.panel p,.hint{font-size:12px;color:var(--muted)}.dropzone{border:1px dashed #47617f;border-radius:12px;padding:18px 12px;text-align:center;background:#0e1727}.dropzone.drag{border-color:var(--accent);background:#12283a}.dropzone strong{display:block;margin-bottom:4px}.dropzone p{margin:0 0 12px}
     .field{display:flex;flex-direction:column;gap:6px;margin-top:12px}.field label{font-size:12px;color:var(--muted)}input[type=url],input[type=text]{width:100%;min-width:0;background:#0b1220;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}input:focus{outline:2px solid #38bdf855;border-color:var(--accent)}.url-row{display:flex;gap:7px}.url-row button{white-space:nowrap}
     .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#0d1524;border:1px solid var(--line);border-radius:10px;padding:10px 7px;min-width:0}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{display:block;margin-top:4px;font-size:14px;overflow-wrap:anywhere}
-    .toggle{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px}.toggle input{accent-color:var(--accent2)}.message{margin-top:12px;padding:10px;border-radius:9px;background:#0d1524;color:var(--muted);font-size:12px;overflow-wrap:anywhere}.message.error{color:#fecaca;background:#351b25}
+    .toggle{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px}.toggle input{accent-color:var(--accent2)}\n    .color-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}.swatch{width:30px;height:30px;padding:0;border-radius:8px;overflow:hidden}.swatch input{width:100%;height:100%;padding:0;border:0;background:none;cursor:pointer}.range-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;margin-top:12px}.range-row label{font-size:12px;color:var(--muted)}.range-row output{font-size:12px;color:var(--text);min-width:42px;text-align:right}.range-row input{grid-column:1/-1;width:100%;accent-color:var(--accent2)}.select-field{width:100%;background:#0b1220;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:9px}\n    .message{margin-top:12px;padding:10px;border-radius:9px;background:#0d1524;color:var(--muted);font-size:12px;overflow-wrap:anywhere}.message.error{color:#fecaca;background:#351b25}
     footer{color:var(--muted);font-size:12px;text-align:center;padding:22px 12px}
     @media(max-width:900px){.layout{grid-template-columns:1fr}aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#viewport{height:58vh;min-height:320px}}
     @media(max-width:560px){aside{display:flex}#viewport{height:52vh;min-height:290px}.stats{gap:5px}.stat strong{font-size:12px}.toolbar button{padding:8px 10px}}
@@ -84,7 +84,7 @@ const fileInput = document.getElementById('fileInput');
 const dropzone = document.getElementById('dropzone');
 const loadUrlButton = document.getElementById('loadUrlButton');
 let renderer, scene, camera, controls, currentMesh = null, grid, axes, wireframe = false;
-let currentUrl = null;
+let currentUrl = null;\nlet modelBaseColor = 0x7dd3fc;\nlet modelBaseScale = 1;
 
 function setMessage(text, error = false) {
   message.textContent = text;
@@ -92,7 +92,7 @@ function setMessage(text, error = false) {
 }
 function init() {
   scene = new THREE.Scene();
-  scene.background = new THREE.Color('#10192a');
+  scene.background = new THREE.Color(document.getElementById('backgroundColor').value);
   camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.01, 1000000);
   camera.position.set(140, 110, 140);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -215,7 +215,7 @@ async function openUrl() {
     setMessage('Kunde inte hämta modellen. Kontrollera att länken pekar direkt på en STL-fil och att servern tillåter CORS. Detalj: ' + (err?.message || 'nätverksfel'), true);
   } finally { loadUrlButton.disabled = false; }
 }
-function setView(kind) {
+function updateMaterial() {\n  if (!currentMesh) return;\n  currentMesh.material.color.set(document.getElementById('modelColor').value);\n  currentMesh.material.metalness = Number(document.getElementById('metalControl').value) / 100;\n  currentMesh.material.roughness = Number(document.getElementById('roughControl').value) / 100;\n  currentMesh.material.flatShading = document.getElementById('flatToggle').checked;\n  currentMesh.material.needsUpdate = true;\n}\nfunction setView(kind) {
   if (!currentMesh) return;
   const box = new THREE.Box3().setFromObject(currentMesh);
   const size = box.getSize(new THREE.Vector3());
@@ -238,7 +238,7 @@ document.getElementById('wireBtn').addEventListener('click', e => {
   wireframe = !wireframe; e.currentTarget.textContent = 'Trådmodell: ' + (wireframe ? 'på' : 'av');
   if (currentMesh) currentMesh.material.wireframe = wireframe;
 });
-document.getElementById('gridToggle').addEventListener('change', e => { grid.visible = e.target.checked; });
+document.querySelectorAll('[data-bg]').forEach(btn => btn.addEventListener('click', () => { const color = btn.dataset.bg; scene.background.set(color); document.getElementById('backgroundColor').value = color; }));\ndocument.getElementById('backgroundColor').addEventListener('input', e => scene.background.set(e.target.value));\ndocument.getElementById('modelColor').addEventListener('input', updateMaterial);\ndocument.getElementById('metalControl').addEventListener('input', e => { document.getElementById('metalValue').textContent = e.target.value + '%'; updateMaterial(); });\ndocument.getElementById('roughControl').addEventListener('input', e => { document.getElementById('roughValue').textContent = e.target.value + '%'; updateMaterial(); });\ndocument.getElementById('flatToggle').addEventListener('change', updateMaterial);\ndocument.getElementById('scaleControl').addEventListener('input', e => { const v = Number(e.target.value); document.getElementById('scaleValue').textContent = v + '%'; if (currentMesh) { currentMesh.scale.setScalar(v / 100); fitCamera(currentMesh); } });\ndocument.getElementById('rotationControl').addEventListener('change', e => { if (currentMesh) { currentMesh.rotation.y = THREE.MathUtils.degToRad(Number(e.target.value)); fitCamera(currentMesh); } });\ndocument.getElementById('resetModelBtn').addEventListener('click', () => { document.getElementById('modelColor').value = '#7dd3fc'; document.getElementById('scaleControl').value = '100'; document.getElementById('scaleValue').textContent = '100%'; document.getElementById('metalControl').value = '18'; document.getElementById('metalValue').textContent = '18%'; document.getElementById('roughControl').value = '38'; document.getElementById('roughValue').textContent = '38%'; document.getElementById('rotationControl').value = '0'; document.getElementById('flatToggle').checked = false; if (currentMesh) { currentMesh.scale.setScalar(1); currentMesh.rotation.set(0,0,0); } updateMaterial(); if (currentMesh) fitCamera(currentMesh); });\ndocument.getElementById('gridToggle').addEventListener('change', e => { grid.visible = e.target.checked; });
 document.getElementById('axesToggle').addEventListener('change', e => { axes.visible = e.target.checked; });
 dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
 dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
