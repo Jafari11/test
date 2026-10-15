@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>STL Studio — 3D-visare</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2b;--line:#27334a;--muted:#9aa9c2;--text:#edf3ff;--accent:#7dd3fc;--accent2:#38bdf8}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+    button,input{font:inherit}button{border:1px solid var(--line);background:#1b263b;color:var(--text);padding:9px 12px;border-radius:10px;cursor:pointer}button:hover{border-color:var(--accent)}button.primary{background:var(--accent2);color:#06111c;border-color:var(--accent2);font-weight:700}button:disabled{opacity:.45;cursor:not-allowed}
+    header{padding:22px clamp(16px,4vw,44px);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+    .brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:#12344a;color:var(--accent);font-size:22px}.brand h1{font-size:20px;margin:0}.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+    main{padding:22px clamp(12px,3vw,36px);max-width:1600px;margin:auto}.layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px}.viewer-card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+    .viewer-top{padding:13px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--line)}.filename{font-weight:650;overflow-wrap:anywhere}.status{color:var(--muted);font-size:12px}
+    #viewport{height:min(68vh,720px);min-height:360px;position:relative;background:radial-gradient(ellipse at 50% 45%,#1b2a41 0%,#10192a 55%,#0d1423 100%);touch-action:none}canvas{display:block;width:100%;height:100%}.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:25px;pointer-events:none}.empty-inner{max-width:360px}.empty-icon{font-size:42px;color:var(--accent)}.empty h2{margin:8px 0;font-size:20px}.empty p{margin:0;color:var(--muted)}.hidden{display:none!important}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--line)}.toolbar .spacer{flex:1}
+    aside{display:flex;flex-direction:column;gap:14px}.panel{padding:16px}.panel h2{font-size:15px;margin:0 0 12px}.panel p,.hint{font-size:12px;color:var(--muted)}.dropzone{border:1px dashed #47617f;border-radius:12px;padding:18px 12px;text-align:center;background:#0e1727}.dropzone.drag{border-color:var(--accent);background:#12283a}.dropzone strong{display:block;margin-bottom:4px}.dropzone p{margin:0 0 12px}
+    .field{display:flex;flex-direction:column;gap:6px;margin-top:12px}.field label{font-size:12px;color:var(--muted)}input[type=url],input[type=text]{width:100%;min-width:0;background:#0b1220;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}input:focus{outline:2px solid #38bdf855;border-color:var(--accent)}.url-row{display:flex;gap:7px}.url-row button{white-space:nowrap}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stat{background:#0d1524;border:1px solid var(--line);border-radius:10px;padding:10px 7px;min-width:0}.stat span{display:block;color:var(--muted);font-size:11px}.stat strong{display:block;margin-top:4px;font-size:14px;overflow-wrap:anywhere}
+    .toggle{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:10px}.toggle input{accent-color:var(--accent2)}.message{margin-top:12px;padding:10px;border-radius:9px;background:#0d1524;color:var(--muted);font-size:12px;overflow-wrap:anywhere}.message.error{color:#fecaca;background:#351b25}
+    footer{color:var(--muted);font-size:12px;text-align:center;padding:22px 12px}
+    @media(max-width:900px){.layout{grid-template-columns:1fr}aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#viewport{height:58vh;min-height:320px}}
+    @media(max-width:560px){aside{display:flex}#viewport{height:52vh;min-height:290px}.stats{gap:5px}.stat strong{font-size:12px}.toolbar button{padding:8px 10px}}
+  </style>
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
+  </script>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="logo">◇</div><div><h1>STL Studio</h1><p>En enkel 3D-visare för modeller till 3D-utskrift</p></div></div>
+  <button id="openButton" class="primary">＋ Öppna STL-fil</button>
+  <input id="fileInput" type="file" accept=".stl,model/stl,application/sla" hidden>
+</header>
+<main>
+  <div class="layout">
+    <section class="viewer-card">
+      <div class="viewer-top"><div><div class="filename" id="filename">Ingen modell inläst</div><div class="status" id="modelStatus">Öppna en STL-fil eller ange en URL</div></div><div class="status">Dra för att rotera · hjul för att zooma</div></div>
+      <div id="viewport">
+        <div class="empty" id="emptyState"><div class="empty-inner"><div class="empty-icon">⬡</div><h2>Din modell visas här</h2><p>Släpp en .stl-fil i fönstret eller välj en fil från datorn. Du kan också läsa in en fil från en direktlänk.</p></div></div>
+      </div>
+      <div class="toolbar">
+        <button id="frontBtn">Framifrån</button><button id="topBtn">Ovanifrån</button><button id="isoBtn">Isometrisk</button><button id="resetBtn">Centrera vy</button><span class="spacer"></span><button id="wireBtn">Trådmodell: av</button>
+      </div>
+    </section>
+    <aside>
+      <section class="panel">
+        <h2>1. Öppna modell</h2>
+        <div class="dropzone" id="dropzone"><strong>Släpp STL-filen här</strong><p>eller välj från datorn</p><button id="browseButton">Välj fil</button></div>
+        <div class="field"><label for="modelUrl">Direktlänk till en STL-fil</label><div class="url-row"><input id="modelUrl" type="url" placeholder="https://exempel.se/modell.stl"><button id="loadUrlButton" class="primary">Ladda</button></div></div>
+        <p class="hint">Webbservern måste tillåta åtkomst från den här sidan (CORS). Länkar till vanliga webbsidor fungerar inte alltid.</p>
+        <div id="message" class="message" role="status">Redo. Dina lokala filer laddas i webbläsaren och skickas inte till denna webbapp.</div>
+      </section>
+      <section class="panel">
+        <h2>2. Modellmått</h2>
+        <div class="stats">
+          <div class="stat"><span>Bredd X</span><strong id="dimX">—</strong></div>
+          <div class="stat"><span>Höjd Y</span><strong id="dimY">—</strong></div>
+          <div class="stat"><span>Djup Z</span><strong id="dimZ">—</strong></div>
+        </div>
+        <p>Dimensionerna visas i mm enligt vanlig STL-konvention. STL lagrar inte en pålitlig enhet, så kontrollera alltid originalets skala.</p>
+      </section>
+      <section class="panel">
+        <h2>3. Visning</h2>
+        <label class="toggle"><input id="gridToggle" type="checkbox" checked> Visa rutnät</label>
+        <label class="toggle"><input id="axesToggle" type="checkbox"> Visa XYZ-axlar</label>
+        <label class="toggle"><input id="rotateToggle" type="checkbox"> Automatisk rotation</label>
+        <p>Tips: använd mus eller pekskärm för att rotera. Zooma med mushjulet eller nyp med två fingrar.</p>
+      </section>
+    </aside>
+  </div>
+</main>
+<footer>STL Studio · Körs i din webbläsare · Byggd med Three.js</footer>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+const viewport = document.getElementById('viewport');
+const emptyState = document.getElementById('emptyState');
+const message = document.getElementById('message');
+const fileInput = document.getElementById('fileInput');
+const dropzone = document.getElementById('dropzone');
+const loadUrlButton = document.getElementById('loadUrlButton');
+let renderer, scene, camera, controls, currentMesh = null, grid, axes, wireframe = false;
+let currentUrl = null;
+
+function setMessage(text, error = false) {
+  message.textContent = text;
+  message.classList.toggle('error', error);
+}
+function init() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color('#10192a');
+  camera = new THREE.PerspectiveCamera(45, viewport.clientWidth / viewport.clientHeight, 0.01, 1000000);
+  camera.position.set(140, 110, 140);
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  viewport.prepend(renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+  scene.add(new THREE.HemisphereLight(0xe1efff, 0x26364b, 2.1));
+  const key = new THREE.DirectionalLight(0xffffff, 2.6);
+  key.position.set(100, 160, 100);
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0x7dd3fc, 0.8);
+  fill.position.set(-100, 30, -80);
+  scene.add(fill);
+  grid = new THREE.GridHelper(200, 20, 0x49627e, 0x27384f);
+  grid.position.y = -0.02;
+  scene.add(grid);
+  axes = new THREE.AxesHelper(50);
+  axes.visible = false;
+  scene.add(axes);
+  window.addEventListener('resize', resize);
+  renderer.setAnimationLoop(() => {
+    if (document.getElementById('rotateToggle').checked && currentMesh) currentMesh.rotation.y += 0.004;
+    controls.update();
+    renderer.render(scene, camera);
+  });
+}
+function resize() {
+  if (!renderer) return;
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
+}
+function fitCamera(object) {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  object.position.sub(center);
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  const fov = camera.fov * Math.PI / 180;
+  let distance = Math.abs(maxDim / (2 * Math.tan(fov / 2))) * 1.8;
+  distance = Math.max(distance, 2);
+  camera.position.set(distance, distance * 0.75, distance);
+  camera.near = Math.max(distance / 10000, 0.01);
+  camera.far = Math.max(distance * 100, 10000);
+  camera.updateProjectionMatrix();
+  controls.target.set(0, 0, 0);
+  controls.minDistance = maxDim * 0.005;
+  controls.maxDistance = maxDim * 100;
+  controls.update();
+  grid.scale.setScalar(Math.max(1, maxDim / 200));
+  grid.position.y = -size.y / 2 - Math.max(size.y * 0.005, 0.02);
+  axes.scale.setScalar(Math.max(1, maxDim / 50));
+}
+function showGeometry(geometry, name) {
+  geometry.computeVertexNormals();
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.geometry.dispose();
+    currentMesh.material.dispose();
+  }
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x7dd3fc, metalness: 0.18, roughness: 0.38,
+    side: THREE.DoubleSide, flatShading: false, wireframe
+  });
+  currentMesh = new THREE.Mesh(geometry, material);
+  scene.add(currentMesh);
+  const box = new THREE.Box3().setFromBufferAttribute(geometry.getAttribute('position'));
+  const size = box.getSize(new THREE.Vector3());
+  document.getElementById('dimX').textContent = formatDim(size.x);
+  document.getElementById('dimY').textContent = formatDim(size.y);
+  document.getElementById('dimZ').textContent = formatDim(size.z);
+  document.getElementById('filename').textContent = name;
+  document.getElementById('modelStatus').textContent = geometry.getAttribute('position').count.toLocaleString('sv-SE') + ' vertexpositioner';
+  emptyState.classList.add('hidden');
+  fitCamera(currentMesh);
+  setMessage('Modellen är inläst. Måtten visas i modellens ursprungliga enheter, tolkade som mm.');
+}
+function formatDim(n) {
+  if (!Number.isFinite(n)) return '—';
+  return n.toLocaleString('sv-SE', { maximumFractionDigits: 2 }) + ' mm';
+}
+function loadArrayBuffer(buffer, name) {
+  try {
+    setMessage('Läser in och beräknar modellen…');
+    const geometry = new STLLoader().parse(buffer);
+    if (!geometry.getAttribute('position') || geometry.getAttribute('position').count === 0) throw new Error('Filen verkar inte innehålla någon geometri.');
+    showGeometry(geometry, name);
+  } catch (err) {
+    console.error(err);
+    setMessage('Kunde inte läsa STL-filen: ' + (err?.message || 'okänt fel'), true);
+  }
+}
+function openFile(file) {
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.stl') && file.type !== 'model/stl') {
+    setMessage('Välj en STL-fil (.stl).', true); return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => loadArrayBuffer(reader.result, file.name);
+  reader.onerror = () => setMessage('Kunde inte läsa filen från datorn.', true);
+  reader.readAsArrayBuffer(file);
+}
+async function openUrl() {
+  const url = document.getElementById('modelUrl').value.trim();
+  if (!url) { setMessage('Ange en direktlänk till en STL-fil.', true); return; }
+  let parsed;
+  try { parsed = new URL(url); } catch { setMessage('URL:en verkar inte vara giltig.', true); return; }
+  if (!['http:', 'https:'].includes(parsed.protocol)) { setMessage('Använd en HTTP- eller HTTPS-länk.', true); return; }
+  loadUrlButton.disabled = true;
+  setMessage('Hämtar STL från länken…');
+  try {
+    const response = await fetch(parsed.href);
+    if (!response.ok) throw new Error('Servern svarade med HTTP ' + response.status + '.');
+    const buffer = await response.arrayBuffer();
+    loadArrayBuffer(buffer, decodeURIComponent(parsed.pathname.split('/').pop() || 'modell.stl'));
+  } catch (err) {
+    setMessage('Kunde inte hämta modellen. Kontrollera att länken pekar direkt på en STL-fil och att servern tillåter CORS. Detalj: ' + (err?.message || 'nätverksfel'), true);
+  } finally { loadUrlButton.disabled = false; }
+}
+function setView(kind) {
+  if (!currentMesh) return;
+  const box = new THREE.Box3().setFromObject(currentMesh);
+  const size = box.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z, 1);
+  if (kind === 'front') camera.position.set(0, 0, maxDim * 2.2);
+  if (kind === 'top') camera.position.set(0, maxDim * 2.2, 0.001);
+  if (kind === 'iso') camera.position.set(maxDim * 1.8, maxDim * 1.35, maxDim * 1.8);
+  camera.lookAt(0, 0, 0); controls.target.set(0, 0, 0); controls.update();
+}
+document.getElementById('openButton').addEventListener('click', () => fileInput.click());
+document.getElementById('browseButton').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { openFile(e.target.files?.[0]); fileInput.value = ''; });
+loadUrlButton.addEventListener('click', openUrl);
+document.getElementById('modelUrl').addEventListener('keydown', e => { if (e.key === 'Enter') openUrl(); });
+document.getElementById('frontBtn').addEventListener('click', () => setView('front'));
+document.getElementById('topBtn').addEventListener('click', () => setView('top'));
+document.getElementById('isoBtn').addEventListener('click', () => setView('iso'));
+document.getElementById('resetBtn').addEventListener('click', () => { if (currentMesh) fitCamera(currentMesh); });
+document.getElementById('wireBtn').addEventListener('click', e => {
+  wireframe = !wireframe; e.currentTarget.textContent = 'Trådmodell: ' + (wireframe ? 'på' : 'av');
+  if (currentMesh) currentMesh.material.wireframe = wireframe;
+});
+document.getElementById('gridToggle').addEventListener('change', e => { grid.visible = e.target.checked; });
+document.getElementById('axesToggle').addEventListener('change', e => { axes.visible = e.target.checked; });
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => { e.preventDefault(); dropzone.classList.remove('drag'); openFile(e.dataTransfer.files?.[0]); });
+viewport.addEventListener('dragover', e => e.preventDefault());
+viewport.addEventListener('drop', e => { if (e.dataTransfer.files?.length) { e.preventDefault(); openFile(e.dataTransfer.files[0]); } });
+init();
+</script>
+</body>
+</html>
